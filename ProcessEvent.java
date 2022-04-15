@@ -9,11 +9,15 @@
 
 public class ProcessEvent implements Comparable<ProcessEvent>
 {
+    //  TYPE - What kind of Event is it
+    //  PROCESSID - What process the event is associated with
+    //  TIME - When does the event take place
     private Type type;
 
     private int processId;
     private int time;
 
+    //  CONSTRUCTOR
     public ProcessEvent(Type type, int processId, int time)
     {
         this.type = type;
@@ -22,11 +26,16 @@ public class ProcessEvent implements Comparable<ProcessEvent>
         this.time = time;
     }
 
+    //  GETTER - Return Event type
     public Type getType()   {   return type;    }
 
+    //  GETTER - Process Id
     public int getProcessId()   {   return processId;   }
+
+    //  GETTER - Return when event occurs
     public int getTime()    {   return time;    }
 
+    //  ENUM - Event Type
     enum Type
     {
         ARRIVE, BLOCK,
@@ -36,10 +45,12 @@ public class ProcessEvent implements Comparable<ProcessEvent>
     @Override
     public String toString()
     {
-        return "[EVENT TYPE: " + getType() + " | PROCESS ID: " + getProcessId() +
-                " | TIME: " + getTime() + "]";
+        return "\t[EVENT TYPE: " + getType() + " | PROCESS ID: " + getProcessId() +
+                " | START TIME: " + getTime() + "]";
     }
 
+    //  OVERRIDE - Help with PriorityQueue in comparing Events
+    //      by time
     @Override
     public int compareTo(ProcessEvent otherEvent)
     {
