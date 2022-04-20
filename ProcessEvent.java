@@ -59,7 +59,14 @@ public class ProcessEvent implements Comparable<ProcessEvent>
         else if(this.getTime() < otherEvent.getTime())
             return -1;
         else
-            return 0;
+        {
+            if(this.getType() == Type.ARRIVE && otherEvent.getType() != Type.ARRIVE)
+                return -1;
+            else if(this.getType() != Type.ARRIVE && otherEvent.getType() == Type.ARRIVE)
+                return 1;
+        }
+
+        return 0;
     }
 
 }

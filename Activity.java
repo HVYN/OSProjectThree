@@ -22,11 +22,18 @@ public class Activity
         this.activityDuration = activityDuration;
     }
 
+    //  DECREMENT - Lower Activity Duration
+    public void decrementActivityDuration(int duration)
+        {   activityDuration -= duration;   }
+
     //  GETTER - Activity Duration
     public int getActivityDuration()    {   return activityDuration;    }
 
     //  GETTER - Return activity Type
     public Type getType()   {   return type;    }
+
+    //  HELPER - If Activity Duration is 0, it's finished
+    public boolean isFinished() {   return activityDuration <= 0;   }
 
     //  ENUM - Activity Type
     enum Type
