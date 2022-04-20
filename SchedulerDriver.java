@@ -7,10 +7,7 @@
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.LinkedList;
-import java.util.PriorityQueue;
-import java.util.Queue;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.BlockingDeque;
 
 public class SchedulerDriver
@@ -35,9 +32,33 @@ public class SchedulerDriver
 
             int processId = 0;
 
+            int quantum = -1, numPriorities = -1;
+            boolean serviceGiven = false;
+            double alpha = -1;
+
             //  FIRST INPUT LINE WILL ALWAYS BE ALGORITHM KEY.
             String algorithm = algorithmReader.nextLine();
 
+            //  IF ALGORITHM FILE HAS MORE TO PARSE
+            while(algorithmReader.hasNextLine())
+            {
+                String line = algorithmReader.nextLine();
+
+                if(line.substring(0, 6).equals("alpha="))
+                    alpha = Double.parseDouble(line.substring(6));
+                else if(line.substring(0, 8).equals("quantum="))
+                    quantum = Integer.parseInt(line.substring(8));
+                else if(line.substring(0, 14).equals("service_given="))
+                    serviceGiven = Boolean.parseBoolean(line.substring(14));
+                else if(line.substring(0, 15).equals("num_priorities="))
+                    numPriorities = Integer.parseInt(line.substring(15));
+            }
+
+            //  DEBUG: SHOW ALL PARAMETERS' VALUES
+            // System.out.println("\nQUANTUM: " + quantum + "\nSERVICE GIVEN: " + serviceGiven +
+            //         "\nNUMBER OF PRIORITIES: " + numPriorities + "\nALPHA: " + alpha);
+
+            //  PARSE THRU PROCESSES FILE
             while(processesReader.hasNextLine())
             {
                 String[] lineElements = processesReader.nextLine().split("\\s+");
@@ -73,115 +94,299 @@ public class SchedulerDriver
             System.out.print("\nCURRENT ALGORITHM: ");
 
             if(algorithm.equals("FCFS"))
-            {
-                System.out.println("FIRST COME, FIRST SERVE\n");
-
-                System.out.println("INITIAL STATE");
-                for(SimulatedProcess process : processList)
-                    System.out.println(process);
-
-                System.out.println();
-
-                int clockTime = 0;
-                SimulatedProcess currentProcess = null;
-                ProcessEvent currentEvent = null;
-
-                while(!eventQueue.isEmpty())
-                {
-                    //  GRAB NEXT EVENT
-                    currentEvent = eventQueue.poll();
-
-                    //  IF TIMESTAMP IS AHEAD OF CLOCK, SET CLOCK TO MATCH
-                    if(currentEvent.getTime() > clockTime)
-                        clockTime = currentEvent.getTime();
-
-                    //  PRINT CLOCK TIME AND CURRENT EVENT
-                    System.out.println("\nCLOCK: " + clockTime);
-                    System.out.println(currentEvent);
-
-                    //  PARSE CURRENT EVENT
-                    if(currentEvent.getType() == ProcessEvent.Type.ARRIVE)
-                    {
-                        int elapsedTime = 0;
-
-                        processList.get(currentEvent.getProcessId()).setArrivalTime(clockTime);
-
-                        processList.get(currentEvent.getProcessId()).setCurrentState(SimulatedProcess.PState.READY);
-                    }
-                    else if(currentEvent.getType() == ProcessEvent.Type.BLOCK)
-                        processList.get(currentEvent.getProcessId()).setCurrentState(SimulatedProcess.PState.BLOCKING);
-                    else if(currentEvent.getType() == ProcessEvent.Type.UNBLOCK)
-                        processList.get(currentEvent.getProcessId()).setCurrentState(SimulatedProcess.PState.RUNNING);
-                    else if(currentEvent.getType() == ProcessEvent.Type.EXIT)
-                    {
-                        processList.get(currentEvent.getProcessId()).setCurrentState(SimulatedProcess.PState.TERMINATED);
-
-                        currentProcess.setFinishTime(clockTime);
-
-                        currentProcess = null;
-                    }
-
-                    if(currentProcess == null || currentProcess.getCurrentState() == SimulatedProcess.PState.TERMINATED)
-                    {
-                        for(SimulatedProcess process : processList)
-                        {
-                            if(process.getCurrentState() == SimulatedProcess.PState.READY)
-                            {
-                                currentProcess = process;
-
-                                currentProcess.setStartTime(clockTime);
-
-                                currentProcess.setCurrentState(SimulatedProcess.PState.RUNNING);
-
-                                int elapsedTime = 0;
-
-                                while(!currentProcess.getActivities().isEmpty())
-                                {
-                                    Activity activity = currentProcess.getActivities().poll();
-
-                                    if(activity.getType() == Activity.Type.CPU)
-                                        elapsedTime += activity.getActivityDuration();
-                                    else if(activity.getType() == Activity.Type.IO)
-                                    {
-                                        eventQueue.add(new ProcessEvent(ProcessEvent.Type.BLOCK, currentProcess.getProcessId(), clockTime + elapsedTime));
-
-                                        elapsedTime += activity.getActivityDuration();
-
-                                        eventQueue.add(new ProcessEvent(ProcessEvent.Type.UNBLOCK, currentProcess.getProcessId(), clockTime + elapsedTime));
-                                    }
-                                }
-
-                                eventQueue.add(new ProcessEvent(ProcessEvent.Type.EXIT, currentProcess.getProcessId(), clockTime + elapsedTime));
-
-                                break;
-                            }
-                        }
-                    }
-
-                    System.out.println("\tCURRENT STATE");
-
-                    if(currentProcess == null)
-                        System.out.println("NO PROCESS RUNNING");
-                    else
-                        System.out.println("CURRENT PROCESS RUNNING: " + processList.get(currentEvent.getProcessId()));
-
-                    for(SimulatedProcess process : processList)
-                        System.out.println(process);
-                }
-            }
+                simulateFCFS(processList, eventQueue);
             else if(algorithm.equals("VRR"))
-            {
-                System.out.println("VIRTUAL ROUND ROBIN\n");
-
-            }
+                simulateVRR(processList, eventQueue, quantum);
             else if(algorithm.equals("SPN"))
-            {
-                System.out.println("SHORTEST REMAINING TIME\n");
-
-            }
-
+                simulateSPN(processList, eventQueue, serviceGiven, alpha);
+            else if(algorithm.equals("HRRN"))
+                simulateHRRN(processList, eventQueue, serviceGiven, alpha);
+            else if(algorithm.equals("FEEDBACK"))
+                simulateFEEDBACK(processList, eventQueue, quantum, numPriorities);
         }
         else
             System.out.println("MISSING ARGUMENTS!");
     }
+
+    //  HELPER - Display all processes
+    private static void displayCurrentProcessState(LinkedList<SimulatedProcess> processList)
+    {
+        System.out.println("CURRENT PROCESS STATE: ");
+        for(SimulatedProcess process : processList)
+            System.out.println(process);
+    }
+
+    //  HELPER - Display process queue
+    private static void displayProcessQueue(Queue<SimulatedProcess> processQueue)
+    {
+        System.out.println("CURRENT PROCESS QUEUE: ");
+
+        if(processQueue.isEmpty())
+            System.out.println("\tEMPTY");
+        else
+        {
+            for (SimulatedProcess process : processQueue)
+                System.out.println(process);
+        }
+    }
+
+    //  HELPER - FEEDBACK
+    private static void simulateFEEDBACK(LinkedList<SimulatedProcess> processList, Queue<ProcessEvent> eventQueue, int quantum, int numPriorities)
+    {
+
+
+    }
+
+    //  HELPER - HIGHEST RESPONSE RATIO NEXT
+    private static void simulateHRRN(LinkedList<SimulatedProcess> processList, Queue<ProcessEvent> eventQueue, boolean serviceGiven, double alpha)
+    {
+
+
+    }
+
+    //  HELPER - SHORTEST REMAINING TIME
+    private static void simulateSPN(LinkedList<SimulatedProcess> processList, Queue<ProcessEvent> eventQueue, boolean serviceGiven, double alpha)
+    {
+
+
+    }
+
+    //  HELPER - VIRTUAL ROUND ROBIN
+    private static void simulateVRR(LinkedList<SimulatedProcess> processList, Queue<ProcessEvent> eventQueue, int quantum)
+    {
+        int clockTime = 0;
+
+        ProcessEvent currentEvent = null;
+
+        //  QUEUE for Processes
+        Queue<SimulatedProcess> processQueue = new LinkedList<>();
+
+        System.out.println("VIRTUAL ROUND ROBIN\n");
+
+        System.out.println("INITIAL STATE");
+        displayProcessQueue(processQueue);
+        displayCurrentProcessState(processList);
+
+        System.out.println();
+
+        while(!eventQueue.isEmpty())
+        {
+            //  GRAB NEXT EVENT
+            currentEvent = eventQueue.poll();
+
+            //  IF TIMESTAMP IS AHEAD OF CLOCK, SET CLOCK TO MATCH
+            if(currentEvent.getTime() > clockTime)
+                clockTime = currentEvent.getTime();
+
+            //  PRINT CLOCK TIME AND CURRENT EVENT
+            System.out.println("\nCLOCK: " + clockTime);
+            System.out.println(currentEvent);
+
+            SimulatedProcess eventProcess = processList.get(currentEvent.getProcessId());
+
+            //  PARSE CURRENT EVENT
+            if(currentEvent.getType() == ProcessEvent.Type.ARRIVE)
+            {
+                eventProcess.setArrivalTime(clockTime);
+
+                eventProcess.setCurrentState(SimulatedProcess.PState.READY);
+
+                //  ADD PROCESS TO PROCESS QUEUE
+                processQueue.add(eventProcess);
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.BLOCK)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.BLOCKING);
+
+                //  REMOVE PROCESS FROM QUEUE
+                processQueue.poll();
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.UNBLOCK)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.READY);
+
+                //  ADD PROCESS BACK INTO QUEUE, AFTER UNBLOCKING
+                processQueue.add(eventProcess);
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.TIMEOUT)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.READY);
+
+                processQueue.add(processQueue.poll());
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.EXIT)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.TERMINATED);
+
+                eventProcess.setFinishTime(clockTime);
+
+                processQueue.poll();
+            }
+
+            //  HEAD OF QUEUE IS CURRENT RUNNING PROCESS! REMEMBER
+            if(!processQueue.isEmpty())
+            {
+                SimulatedProcess currentProcess = processQueue.peek();
+                int currentProcessId = currentProcess.getProcessId();
+
+                //  HANDLE PROCESS STATES
+                if(currentProcess.getCurrentState() == SimulatedProcess.PState.READY)
+                {
+                    //  READY -> RUNNING
+                    currentProcess.setCurrentState(SimulatedProcess.PState.RUNNING);
+
+                    if(currentProcess.getStartTime() == -1)
+                        currentProcess.setStartTime(clockTime);
+
+                    if(!currentProcess.getActivities().isEmpty())
+                    {
+                        //  ASSUMPTION: ALWAYS START WITH CPU ACTIVITY
+                        int durationCPU = currentProcess.getActivities().peek().getActivityDuration();
+                            currentProcess.incrementServiceTime(durationCPU);
+
+                        if (quantum < durationCPU)
+                        {
+                            currentProcess.getActivities().peek().decrementActivityDuration(quantum);
+
+                            eventQueue.add(new ProcessEvent(ProcessEvent.Type.TIMEOUT, currentProcessId, clockTime + quantum));
+                        }
+                        else if (quantum >= durationCPU)
+                        {
+                            //  POP CPU ACTIVITY
+                            currentProcess.getActivities().poll();
+
+                            if(!currentProcess.getActivities().isEmpty())
+                            {
+                                int durationIO = currentProcess.getActivities().poll().getActivityDuration();
+
+                                int startTimeIO = clockTime + durationCPU;
+                                int endTimeIO = startTimeIO + durationIO;
+
+                                eventQueue.add(new ProcessEvent(ProcessEvent.Type.BLOCK, currentProcessId, startTimeIO));
+                                eventQueue.add(new ProcessEvent(ProcessEvent.Type.UNBLOCK, currentProcessId, endTimeIO));
+                            }
+                            else
+                                eventQueue.add(new ProcessEvent(ProcessEvent.Type.EXIT, currentProcessId, clockTime + durationCPU));
+
+                        }
+                    }
+                }
+            }
+
+            //  DISPLAY INFORMATION OF CURRENT STATE | DEBUGGING PURPOSES
+            displayProcessQueue(processQueue);
+            displayCurrentProcessState(processList);
+        }
+    }
+
+    //  HELPER - FIRST COME FIRST SERVE
+    private static void simulateFCFS(LinkedList<SimulatedProcess> processList, Queue<ProcessEvent> eventQueue)
+    {
+        int clockTime = 0;
+
+        //  Is current process necessary? (Can peek() top queue)
+        ProcessEvent currentEvent = null;
+
+        //  QUEUE for Processes
+        Queue<SimulatedProcess> processQueue = new LinkedList<>();
+
+        System.out.println("FIRST COME, FIRST SERVE\n");
+
+        System.out.println("INITIAL STATE");
+        displayProcessQueue(processQueue);
+        displayCurrentProcessState(processList);
+
+        System.out.println();
+
+        while(!eventQueue.isEmpty())
+        {
+            //  GRAB NEXT EVENT
+            currentEvent = eventQueue.poll();
+
+            //  IF TIMESTAMP IS AHEAD OF CLOCK, SET CLOCK TO MATCH
+            if(currentEvent.getTime() > clockTime)
+                clockTime = currentEvent.getTime();
+
+            //  PRINT CLOCK TIME AND CURRENT EVENT
+            System.out.println("\nCLOCK: " + clockTime);
+            System.out.println(currentEvent);
+
+            SimulatedProcess eventProcess = processList.get(currentEvent.getProcessId());
+
+            //  PARSE CURRENT EVENT
+            if(currentEvent.getType() == ProcessEvent.Type.ARRIVE)
+            {
+                eventProcess.setArrivalTime(clockTime);
+
+                eventProcess.setCurrentState(SimulatedProcess.PState.READY);
+
+                //  ADD PROCESS TO PROCESS QUEUE
+                processQueue.add(eventProcess);
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.BLOCK)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.BLOCKING);
+
+                //  REMOVE PROCESS FROM QUEUE
+                processQueue.poll();
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.UNBLOCK)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.READY);
+
+                //  ADD PROCESS BACK INTO QUEUE, AFTER UNBLOCKING
+                processQueue.add(eventProcess);
+            }
+            else if(currentEvent.getType() == ProcessEvent.Type.EXIT)
+            {
+                eventProcess.setCurrentState(SimulatedProcess.PState.TERMINATED);
+
+                eventProcess.setFinishTime(clockTime);
+
+                processQueue.poll();
+            }
+
+            //  HEAD OF QUEUE IS CURRENT RUNNING PROCESS! REMEMBER
+            if(!processQueue.isEmpty())
+            {
+                SimulatedProcess currentProcess = processQueue.peek();
+                int currentProcessId = currentProcess.getProcessId();
+
+                //  HANDLE PROCESS STATES
+                if(currentProcess.getCurrentState() == SimulatedProcess.PState.READY)
+                {
+                    //  READY -> RUNNING
+                    currentProcess.setCurrentState(SimulatedProcess.PState.RUNNING);
+
+                    if(currentProcess.getStartTime() == -1)
+                        currentProcess.setStartTime(clockTime);
+
+                    //  ASSUMPTION: ALWAYS START WITH CPU ACTIVITY
+                    int durationCPU = currentProcess.getActivities().poll().getActivityDuration();
+                        currentProcess.incrementServiceTime(durationCPU);
+
+                    //  [START | CPU]
+                    //  [START | CPU | IO]
+                    if(!currentProcess.getActivities().isEmpty())
+                    {
+                        int durationIO = currentProcess.getActivities().poll().getActivityDuration();
+
+                        int startTimeIO = clockTime + durationCPU;
+                        int endTimeIO = startTimeIO + durationIO;
+
+                        eventQueue.add(new ProcessEvent(ProcessEvent.Type.BLOCK, currentProcessId, startTimeIO));
+                        eventQueue.add(new ProcessEvent(ProcessEvent.Type.UNBLOCK, currentProcessId, endTimeIO));
+                    }
+                    else
+                        eventQueue.add(new ProcessEvent(ProcessEvent.Type.EXIT, currentProcessId, clockTime + durationCPU));
+                }
+            }
+
+            //  DISPLAY INFORMATION OF CURRENT STATE | DEBUGGING PURPOSES
+            displayProcessQueue(processQueue);
+            displayCurrentProcessState(processList);
+        }
+    }
+
+
 }
