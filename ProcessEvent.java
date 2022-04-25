@@ -64,6 +64,14 @@ public class ProcessEvent implements Comparable<ProcessEvent>
                 return -1;
             else if(this.getType() != Type.ARRIVE && otherEvent.getType() == Type.ARRIVE)
                 return 1;
+            else if(this.getProcessId() == otherEvent.getProcessId())
+            {
+                //  BOTH EVENTS ACT ON THE SAME PROCESS
+                if(this.getType() == Type.UNBLOCK && otherEvent.getType() == Type.EXIT)
+                    return -1;
+                else if(this.getType() == Type.EXIT && otherEvent.getType() == Type.UNBLOCK)
+                    return 1;
+            }
         }
 
         return 0;
