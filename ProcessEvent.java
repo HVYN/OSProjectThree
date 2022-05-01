@@ -49,30 +49,14 @@ public class ProcessEvent implements Comparable<ProcessEvent>
                 " | START TIME: " + getTime() + "]";
     }
 
-    //  OVERRIDE - Help with PriorityQueue in comparing Events
-    //      by time
+    //  OVERRIDE - Help with PriorityQueue in comparing Events by time.
     @Override
     public int compareTo(ProcessEvent otherEvent)
     {
-        if(this.getTime() > otherEvent.getTime())
+        if(this.getTime() >= otherEvent.getTime())
             return 1;
         else if(this.getTime() < otherEvent.getTime())
             return -1;
-        else
-        {
-            if(this.getType() == Type.ARRIVE && otherEvent.getType() != Type.ARRIVE)
-                return -1;
-            else if(this.getType() != Type.ARRIVE && otherEvent.getType() == Type.ARRIVE)
-                return 1;
-            else if(this.getProcessId() == otherEvent.getProcessId())
-            {
-                //  BOTH EVENTS ACT ON THE SAME PROCESS
-                if(this.getType() == Type.UNBLOCK && otherEvent.getType() == Type.EXIT)
-                    return -1;
-                else if(this.getType() == Type.EXIT && otherEvent.getType() == Type.UNBLOCK)
-                    return 1;
-            }
-        }
 
         return 0;
     }
